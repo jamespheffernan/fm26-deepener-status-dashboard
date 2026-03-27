@@ -1,5 +1,5 @@
 window.STATUS_DATA = {
-  "generatedAt": "2026-03-27T12:45:21.767964+00:00",
+  "generatedAt": "2026-03-27T12:46:58.163675+00:00",
   "repo": {
     "name": "FM26 Deepener",
     "root": "/Users/jamesheffernan/GitHub/FM26 Deepener"
@@ -12,7 +12,7 @@ window.STATUS_DATA = {
       "ok": true,
       "count": 19,
       "command": "python3 -m unittest discover -s tests -p test_*.py",
-      "output": "...................\n----------------------------------------------------------------------\nRan 19 tests in 0.408s\n\nOK"
+      "output": "...................\n----------------------------------------------------------------------\nRan 19 tests in 0.425s\n\nOK"
     },
     "docDriftCount": 4
   },
