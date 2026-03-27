@@ -4,6 +4,7 @@ import re
 
 from .binary import read_length_prefixed_string
 from .binary import decode_date
+from .inline_people import resolve_inline_name_owner_for_offset
 from .metadata import find_diff_offsets_chunked, group_diff_offsets
 
 
@@ -216,37 +217,55 @@ def decode_staff_roles_from_diff_frames(diff_frames: dict[str, bytes]) -> list[d
         if vector_start <= offset < vector_end
     ]
     relative_offset = changed_offset - vector_start
+    owner = resolve_inline_name_owner_for_offset(after, changed_offset)
+    person_key = f"frame3:staff:0x{family_start:08X}"
+    confidence = 0.88
+    evidence = [
+        "diff_frame:squizzi_wwy",
+        f"family_start:0x{family_start:08X}",
+        f"vector_start:0x{vector_start:08X}",
+        f"vector_end:0x{vector_end - 1:08X}",
+        f"changed_offset:0x{changed_offset:08X}",
+        f"working_with_youngsters_rel:+0x{relative_offset:02X}",
+        f"previous_value:{previous_value}",
+        f"current_value:{current_value}",
+        *[
+            "changed_byte:+0x{rel:02X}:{before}->{after}".format(
+                rel=entry["relative_offset"],
+                before=entry["before"],
+                after=entry["after"],
+            )
+            for entry in changed_bytes
+        ],
+    ]
+    if owner is not None:
+        person_key = str(owner["person_key"])
+        confidence = 0.93
+        tail = owner["tail"]
+        evidence.extend(
+            [
+                f"owner_full_name:{owner['full_name']}",
+                f"owner_name_length_offset:0x{int(owner['name_length_offset']):08X}",
+                f"owner_name_offset:0x{int(owner['name_offset']):08X}",
+                f"owner_distance:{int(owner['distance'])}",
+                f"tail_variant:{tail['variant']}",
+                f"tail_start:0x{int(tail['tail_start']):08X}",
+            ]
+        )
 
     return [
         {
-            "person_key": f"frame3:staff:0x{family_start:08X}",
+            "person_key": person_key,
             "role_flags": {},
             "staff_attributes": {
                 "WorkingWithYoungsters": current_value,
             },
             "club_link_refs": [],
-            "confidence": 0.88,
+            "confidence": confidence,
             "vector_start": vector_start,
             "vector_length": STAFF_VECTOR_LEN,
             "changed_bytes": changed_bytes,
-            "evidence": [
-                "diff_frame:squizzi_wwy",
-                f"family_start:0x{family_start:08X}",
-                f"vector_start:0x{vector_start:08X}",
-                f"vector_end:0x{vector_end - 1:08X}",
-                f"changed_offset:0x{changed_offset:08X}",
-                f"working_with_youngsters_rel:+0x{relative_offset:02X}",
-                f"previous_value:{previous_value}",
-                f"current_value:{current_value}",
-                *[
-                    "changed_byte:+0x{rel:02X}:{before}->{after}".format(
-                        rel=entry["relative_offset"],
-                        before=entry["before"],
-                        after=entry["after"],
-                    )
-                    for entry in changed_bytes
-                ],
-            ],
+            "evidence": evidence,
         }
     ]
 

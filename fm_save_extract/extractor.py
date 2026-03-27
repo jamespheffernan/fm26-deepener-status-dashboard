@@ -58,6 +58,20 @@ def extract_world_state(
         "metadata_clusters": [cluster.to_dict() for cluster in metadata_clusters],
         "low_confidence_people": low_confidence_people,
         "inline_name_people_count": len(inline_named_people),
+        "inline_secondary_tail_counts": {
+            "pat": sum(
+                1
+                for person in inline_named_people
+                for tail in person.get("inline_secondary_tails", [])
+                if tail.get("variant") == "pat"
+            ),
+            "pat2": sum(
+                1
+                for person in inline_named_people
+                for tail in person.get("inline_secondary_tails", [])
+                if tail.get("variant") == "pat2"
+            ),
+        },
         "inline_name_people_sample": [
             {
                 "person_key": person["person_key"],
@@ -66,6 +80,17 @@ def extract_world_state(
             }
             for person in inline_named_people[:12]
         ],
+        "inline_pat2_tail_sample": [
+            {
+                "person_key": person["person_key"],
+                "full_name": person["full_name"],
+                "tail_start": tail["tail_start"],
+                "working_with_youngsters_candidate_offset": tail.get("working_with_youngsters_candidate_offset"),
+            }
+            for person in inline_named_people
+            for tail in person.get("inline_secondary_tails", [])
+            if tail.get("variant") == "pat2"
+        ][:12],
         **summarize_clusters(metadata_clusters),
     }
 

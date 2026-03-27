@@ -1,61 +1,82 @@
 # Next Decoding Brief
 
-## Current Breakthrough
-- The real player stats block is now confirmed.
-- Layout:
-  - `0x00-0x0E`: 15 position ratings stored directly on the `1-20` scale
-  - `0x0F-0x44`: 54 classic FM attributes in FMScout/CE order, stored on an internal `0-100` scale
-- Display approximation for non-position attributes:
-  - `display ~= round(raw / 5)`
-- Haaland is confirmed at:
+## Current Baseline
+- The known hybrid player block is confirmed:
+  - `0x00-0x0E`: 15 position ratings on the `1-20` scale
+  - `0x0F-0x44`: 54 classic FM attributes on an internal `0-100` scale
+- The fixed preamble at `block - 0x1E` is confirmed:
+  - Home Reputation
+  - Current Reputation
+  - World Reputation
+  - CA
+  - PA
+- Haaland remains the strongest verified live anchor:
   - Original block: `0x060DE453`
   - Modified block: `0x060DE1BB`
-  - Finishing byte: `block + 0x11`, raw `91 -> 5`, display `18 -> 1`
-- Fixed preamble at `block - 0x1E`:
-  - `+0x00`: Home Reputation (`uint16`)
-  - `+0x02`: Current Reputation (`uint16`)
-  - `+0x04`: World Reputation (`uint16`)
-  - `+0x06`: CA (`uint16`)
-  - `+0x08`: PA (`uint16`)
+  - Finishing byte: raw `91 -> 5`, display `18 -> 1`
+- A first-pass world extractor now exists:
+
+```bash
+python3 -m fm_save_extract --input <save-or-frame> --output-dir <dir> [--raw] [--diff-frame <frame>]
+```
+
+- Current extractor outputs:
+  - `game_info.json`
+  - `clubs.json`
+  - `people.json`
+  - `players.json`
+  - `staff_roles.json`
+  - `club_links.json`
+  - `contracts.json`
+  - `unresolved_candidates.json`
+- Synthetic validation already exists for:
+  - contract wage / expiry decoding
+  - staff `WorkingWithYoungsters`
+- Current repo verification: **20 passing tests**
 
 ## Immediate Goal
-Move from “can decode one known player” to “can extract whole world state”.
+Move from "first-pass extractor with anchored records" to "live-save validated joins and broader person/staff/contract coverage".
 
 ## Best Next Targets
-1. Staff/person records
-- Decode managers, assistants, coaches, scouts, physios.
-- Find the non-player/staff attribute block and role flags.
-- Reuse the same person-side anchors where possible: UID, DOB, personality, reputation.
 
-2. Club/person/employment links
-- Identify how people are linked to clubs and jobs.
+### 1. Club / person / employment links
+- Identify how people are linked to clubs, jobs, and teams.
 - Needed for:
   - current manager
   - assistant manager
   - coaching staff
   - squad membership
+  - contracts
   - loans / affiliations / responsibilities
 
-3. Contracts
-- Find contract objects and their links to person + club.
+### 2. Staff-side attribute layouts
+- Decode manager / assistant / coach / scout / physio objects.
+- Reuse person-side anchors where possible:
+  - UID
+  - DOB
+  - personality
+  - reputation
+  - nearby metadata families
+
+### 3. Generalize contract decoding on real saves
+- Move past synthetic frames and isolate live contract objects.
 - Decode:
   - start date
   - expiry date
   - wage
   - bonuses
   - release clauses
-  - optional extension terms
+  - optional extensions
   - loan terms / future fees if present
 
-4. News / inbox / media
-- Do this after joins work.
-- Likely separate object families with refs to person/team/competition/news type.
-- The fully rendered narrative text may also live in `.skc` cache files, so treat save decoding and cache parsing as parallel options.
+### 4. News / inbox / media after joins
+- Do this after people/clubs/contracts are reliable.
+- The fully rendered narrative text may also live in `.skc` cache files, so save decoding and cache parsing remain parallel options.
 
 ## Why This Order
-- Staff + contracts give the biggest structured win after players.
-- News/inbox depends on entity joins underneath it.
-- Without club/person/contract linking, decoded records are isolated blobs.
+- Staff + links + contracts are the biggest structured win after players.
+- `club_links.json` and `contracts.json` already exist as extractor surfaces, so this is the shortest path to turning partial outputs into trustworthy ones.
+- News / inbox sits on top of entity joins and should stay downstream.
 
 ## Useful Metadata Signals Already Seen
 - `Manager`
@@ -76,31 +97,34 @@ Move from “can decode one known player” to “can extract whole world state�
 - `SaveGameReference`
 
 ## Concrete Tasks
-1. Generalize block enumeration
-- Stop relying on “known player” scanning only.
-- Build a scanner that walks candidate person pools and emits blocks with:
-  - block start
-  - preamble fields
-  - decoded attrs
-  - nearby dates / ids / possible references
 
-2. Identify staff-only attribute layout
-- Look for blocks near known manager/assistant DOBs and reputations.
+### 1. Tighten person enumeration
+- Keep candidate scanning general, not known-player only.
+- Emit stronger evidence bundles per candidate:
+  - block start
+  - preamble
+  - decoded attrs
+  - nearby dates
+  - possible ids
+  - possible club / contract / role refs
+
+### 2. Identify staff-only families
+- Look for blocks near known manager / assistant anchors.
 - Compare candidates against expected staff attributes:
   - coaching
   - motivating
   - people management
   - working with youngsters
 
-3. Map links
-- For each decoded person block, find nearby stable refs:
+### 3. Promote joins into real `club_links.json`
+- For each decoded person block, find stable nearby refs for:
   - club ids
-  - contract refs
-  - role/job refs
+  - role / job refs
   - team refs
+  - contract refs
 
-4. Contract decoder
-- Once link candidates are stable, isolate one known contract and diff against a changed save if needed.
+### 4. Generalize contract decoding
+- Once link candidates stabilize, isolate one known live contract and validate with edited saves.
 
 ## Suggested Validation Method
 - Prefer supervised diffs again.
@@ -108,14 +132,13 @@ Move from “can decode one known player” to “can extract whole world state�
   - change a manager contract wage
   - change a contract expiry date
   - change assistant attributes in FMRTE
-- Those will constrain the right object families quickly.
 
 ## Deliverable For The Next Phase
-A first-pass world extractor that emits:
+A stronger world extractor that emits:
 - people
 - players
-- staff roles
-- club links
-- contracts
+- staff roles with better live anchors
+- real club links
+- more reliable contracts
 
 News and inbox can follow once those joins are stable.

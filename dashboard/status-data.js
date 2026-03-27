@@ -1,5 +1,5 @@
 window.STATUS_DATA = {
-  "generatedAt": "2026-03-27T12:46:58.163675+00:00",
+  "generatedAt": "2026-03-27T12:50:39.545597+00:00",
   "repo": {
     "name": "FM26 Deepener",
     "root": "/Users/jamesheffernan/GitHub/FM26 Deepener"
@@ -10,16 +10,16 @@ window.STATUS_DATA = {
     "status": "active",
     "testSuite": {
       "ok": true,
-      "count": 19,
+      "count": 20,
       "command": "python3 -m unittest discover -s tests -p test_*.py",
-      "output": "...................\n----------------------------------------------------------------------\nRan 19 tests in 0.425s\n\nOK"
+      "output": "....................\n----------------------------------------------------------------------\nRan 20 tests in 0.434s\n\nOK"
     },
-    "docDriftCount": 4
+    "docDriftCount": 0
   },
   "metrics": [
     {
       "label": "Tests",
-      "value": "19",
+      "value": "20",
       "detail": "Passing unittest suite"
     },
     {
@@ -253,12 +253,7 @@ window.STATUS_DATA = {
     "Synthetic decoding coverage exists for contract changes and staff-role attribute diffs.",
     "The HTML-export lane now covers more export types and more prompt outputs than STATUS.md currently reports."
   ],
-  "docDrift": [
-    "STATUS.md still tops out at 7 passing tests, while the repo now passes 19.",
-    "AGENT_HANDOFF.md still cites 9 passing tests, so the handoff brief is behind the repo.",
-    "STATUS.md does not mention the newer fm_save_extract CLI or the first-pass world-state bundle outputs.",
-    "The status docs do not yet reflect synthetic coverage for contract decoding and staff-role diff decoding."
-  ],
+  "docDrift": [],
   "sources": [
     {
       "label": "STATUS.md",

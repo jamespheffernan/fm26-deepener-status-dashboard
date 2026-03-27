@@ -13,7 +13,7 @@ from fm_save_extract.diff_decoders import (
     decode_staff_roles_from_diff_frames,
     summarize_pairwise_diff_frames,
 )
-from fm_save_extract.inline_people import extract_inline_named_people
+from fm_save_extract.inline_people import extract_inline_named_people, PAT2
 from fm_save_extract.extractor import extract_world_state
 from fm_save_extract.models import NearbyValue, PersonCandidate, Preamble
 from fm_save_extract.player_blocks import PREAMBLE_OFFSET, dedupe_candidates, display_value, enumerate_person_candidates, read_preamble
@@ -104,11 +104,22 @@ def build_synthetic_contract_frames() -> tuple[bytes, dict[str, bytes]]:
 def build_synthetic_staff_frames() -> dict[str, bytes]:
     before = bytearray(4096)
     after = bytearray(4096)
-    family_start = 0x0200
+    name = b"Jorge Manuel Domingues Maria Vital"
+    name_offset = 0x0100
+    next_name = b"Control Example Name"
+    next_name_offset = 0x0400
+    tail_start = 0x01F9
+    family_start = tail_start + 7
     vector_start = family_start + 0x20
 
-    before[family_start:family_start + 7] = bytes.fromhex("02 40 10 00 00 00 00")
-    after[family_start:family_start + 7] = bytes.fromhex("02 40 10 00 00 00 00")
+    for frame in (before, after):
+        frame[name_offset:name_offset + 4] = len(name).to_bytes(4, "little")
+        frame[name_offset + 4:name_offset + 4 + len(name)] = name
+        frame[name_offset + 4 + len(name):name_offset + 8 + len(name)] = encode_date(dt.date(1962, 8, 25))
+        frame[next_name_offset:next_name_offset + 4] = len(next_name).to_bytes(4, "little")
+        frame[next_name_offset + 4:next_name_offset + 4 + len(next_name)] = next_name
+        frame[next_name_offset + 4 + len(next_name):next_name_offset + 8 + len(next_name)] = encode_date(dt.date(1970, 1, 1))
+        frame[tail_start:tail_start + len(PAT2)] = PAT2
 
     vector = bytearray(
         [
@@ -239,6 +250,16 @@ class FMSaveExtractTests(unittest.TestCase):
         self.assertIsNotNone(people[0]["inline_post_dob"])
         self.assertIn("nearby_date:2032-06-30", " ".join(people[0]["evidence"]))
 
+    def test_extract_inline_named_people_attaches_secondary_pat2_tail(self) -> None:
+        people = extract_inline_named_people(build_synthetic_staff_frames()["squizzi_wwy"])
+
+        self.assertEqual(len(people), 2)
+        jorge = next(person for person in people if person["full_name"] == "Jorge Manuel Domingues Maria Vital")
+        self.assertTrue(jorge["inline_secondary_tails"])
+        pat2_tail = next(tail for tail in jorge["inline_secondary_tails"] if tail["variant"] == "pat2")
+        self.assertEqual(pat2_tail["tail_start"], 0x01F9)
+        self.assertEqual(pat2_tail["working_with_youngsters_candidate_offset"], 0x0236)
+
     def test_cli_writes_full_world_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             frame_path = Path(temp_dir) / "synthetic_frame.bin"
@@ -293,6 +314,7 @@ class FMSaveExtractTests(unittest.TestCase):
 
         self.assertEqual(len(staff_roles), 1)
         self.assertEqual(staff_roles[0]["staff_attributes"]["WorkingWithYoungsters"], 20)
+        self.assertEqual(staff_roles[0]["person_key"], "frame3:person-name:0x00000104")
         self.assertEqual(staff_roles[0]["vector_length"], 0x40)
         self.assertEqual(staff_roles[0]["changed_bytes"][0]["relative_offset"], 0x16)
 
