@@ -1,14 +1,14 @@
 # FM26 Deepener — Agent Handoff Brief
 
 ## Goal
-Take the current first-pass FM26 world extractor from "anchored records with partial joins" to "reliable live-save world state" across players, people, staff roles, contracts, and club links.
+Take the current FM26 world extractor from "good anchored extractions plus targeted relation resolution" to "broader live-save world state with reliable joins across people, clubs, staff roles, and contracts".
 
 ## Current Repo State
 - **HTML export pipeline is production-ready**
   - `python3 -m fm_html_extract`
   - 9 recognized export types
   - 7 prompt templates plus `snapshot-overview.md`
-- **Binary save extraction is no longer just research**
+- **Binary save extraction is now a real extraction surface, not just research**
   - `python3 -m fm_save_extract --input <save-or-frame> --output-dir <dir> [--raw] [--diff-frame <frame>]`
   - Emits:
     - `game_info.json`
@@ -20,9 +20,9 @@ Take the current first-pass FM26 world extractor from "anchored records with par
     - `contracts.json`
     - `unresolved_candidates.json`
 - **Current verification**
-  - 20 passing tests total
-  - `tests/test_fm_html_extract.py`: 9 tests
-  - `tests/test_fm_save_extract.py`: 11 tests
+  - 49 passing tests total across 10 modules
+  - 9 HTML-pipeline tests
+  - 40 save-extractor / relation / real-slice tests
 
 ## What's Working
 - **Save decompression**: `scripts/decompress_save.py` and `fm_save_extract.binary.decompress_main_frame`
@@ -30,24 +30,40 @@ Take the current first-pass FM26 world extractor from "anchored records with par
   - 291,128 first names
   - 595,757 surnames
   - 24,098 clubs
-  - game date/version/header counts
+  - game date / version / header counts
 - **Known hybrid player block decode**
   - 15 position bytes on the `1-20` scale
   - 54 classic FM attributes on internal `0-100` values
   - fixed preamble at `block - 0x1E` for reputation + CA/PA
 - **Candidate enumeration**
   - `fm_save_extract.player_blocks.enumerate_person_candidates`
-  - confidence scoring and known-player matching
+  - richer nearby UID / DOB evidence
+  - improved dedupe behavior
 - **Inline named-person extraction**
   - `fm_save_extract.inline_people.extract_inline_named_people`
-- **Metadata clustering**
-  - `fm_save_extract.metadata`
+  - inline relation windows / relation entries
+  - secondary tail parsing (`pat` / `pat2`)
+- **Reconciliation**
+  - canonical people
+  - `alias_person_keys`
+  - merged hybrid-block + inline-name identities
+- **Relation handling**
+  - `fm_save_extract.relation_tags`
+  - `fm_save_extract.relation_resolution`
+  - typed relation summaries on people
+  - typed link refs on staff roles
+  - emitted `club_links.json`
 - **Supervised diff summaries**
   - `summarize_diff_frames`
   - `summarize_pairwise_diff_frames`
-- **Synthetic decoders already validated**
+- **Targeted decoders already validated**
   - contract wage / expiry
   - staff `WorkingWithYoungsters`
+- **Real-slice validation exists**
+  - 6-slice manifest
+  - Xabi contract family
+  - Jorge staff family
+  - Athletic Club control family
 
 ## Current Save Files
 - **Original (unmodified)**: `frames_claude/frame3.bin` (198.4MB decompressed frame 3)
@@ -82,29 +98,38 @@ Display change: 18 -> 1
 
 ## What the Extractor Already Emits
 - **People**
-  - hybrid-block candidates above confidence threshold
-  - inline full-name / DOB people when available
+  - canonical person records
+  - merged alias keys
+  - typed relation summaries when relation entries exist
 - **Players**
   - positions
   - raw attribute values
   - display attribute values
+- **Staff roles**
+  - decoded `WorkingWithYoungsters`
+  - raw + typed link refs
+- **Contracts**
+  - targeted wage / start / expiry extraction
+  - club-key enrichment when matching club links exist
+- **Club links**
+  - emitted from inline relation entries and staff-role refs
 - **Unresolved evidence**
   - metadata clusters
   - low-confidence people
-  - inline-name counts/samples
+  - inline relation samples
   - diff summaries when comparison frames are supplied
 
 ## What Is Still Missing / Unstable
-1. **Club/person/employment joins are incomplete**
-- `club_links.json` is a target output surface, but not a stable decoded layer yet.
+1. **Relation resolution is only partially generalized**
+- Some club-link resolution still depends on known control patterns rather than broad decoding.
 
-2. **Staff-side attribute families need better live anchors**
-- The extractor has synthetic staff-role validation, but not a generalized live-save staff decoder.
+2. **Staff-side coverage is still targeted**
+- Staff-role decoding is stronger, but not yet generalized across many real families.
 
-3. **Contract decoding needs real-save generalization**
-- Wage / expiry extraction works in supervised synthetic diff tests, but not yet as a broad live-save decoder.
+3. **Contract decoding still needs broader live-save coverage**
+- Targeted success exists; broad generalized extraction does not.
 
-4. **News / inbox / media should wait**
+4. **News / inbox / media should still wait**
 - Those object families depend on reliable joins underneath.
 
 5. **BepInEx remains blocked on Tahoe arm64e**
@@ -112,36 +137,33 @@ Display change: 18 -> 1
 
 ## Recommended Next Steps
 
-### 1. Generalize person scanning
-- Push beyond known-player anchors.
-- Build denser candidate enumeration and evidence emission around person pools.
+### 1. Broaden relation resolution
+- Expand club/person/employment joins beyond the current control-pattern families.
 
-### 2. Stabilize staff-side decoding
-- Find manager / assistant / coach candidates using DOB, reputation, and metadata signals.
-- Promote role flags and staff attributes beyond the current synthetic-only proof points.
+### 2. Generalize staff-side decoding
+- Find manager / assistant / coach candidates using DOB, reputation, metadata, and relation patterns.
 
-### 3. Map joins
-- For each person candidate, find stable nearby refs for:
-  - club ids
-  - job / role refs
-  - team refs
-  - contract refs
-
-### 4. Promote contract decoding from synthetic to live-save validated
-- Best new edited saves:
+### 3. Generalize contract decoding with more edited saves
+- Best next edits:
   - manager wage change
   - contract expiry change
   - assistant attribute change
+
+### 4. Keep adding real-slice fixtures
+- Lock in new control/edit families with manifest-backed tests before broadening heuristics.
 
 ### 5. Leave news/media until joins are trustworthy
 - Narrative objects are downstream of club/person/competition linkage.
 
 ## Key Files
 - `fm_save_extract/__main__.py` — world extractor CLI
-- `fm_save_extract/extractor.py` — first-pass world-state assembly
+- `fm_save_extract/extractor.py` — world-state assembly + reconciliation
+- `fm_save_extract/inline_people.py` — inline-name / relation-entry parsing
 - `fm_save_extract/player_blocks.py` — hybrid block decode + candidate enumeration
+- `fm_save_extract/relation_tags.py` — relation classification
+- `fm_save_extract/relation_resolution.py` — typed relation resolution
 - `fm_save_extract/diff_decoders.py` — contract/staff diff decoders
-- `scripts/fm26_parser.py` — reference extractor for names/clubs/game info
-- `research/binary-format-findings.md` — save-format findings
+- `tests/test_real_slice_extraction.py` — real-slice validation
+- `tests/test_real_slice_manifest.py` — slice manifest stability checks
 - `STATUS.md` — project-wide current status
 - `NEXT_DECODING_BRIEF.md` — next-stage binary decoding priorities

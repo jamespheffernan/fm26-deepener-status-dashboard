@@ -5,11 +5,12 @@ Extract rich game data from Football Manager 26 and use LLMs to generate immersi
 
 ## Current Headline
 - **Best practical path today**: the HTML export pipeline is the production-ready lane.
-- **Binary save work has advanced**: there is now a first-pass `fm_save_extract` CLI that emits structured world-state JSON.
+- **Binary save work has advanced materially**: `fm_save_extract` now does candidate extraction, person reconciliation, relation tagging/resolution, club-link emission, and targeted contract/staff decoding.
 - **Runtime modding is still blocked on macOS Tahoe**: the BepInEx path remains stalled by arm64e requirements.
-- **Current verification**: the repo currently has **20 passing tests** via `python3 -m unittest discover -s tests -p 'test_*.py'`
-  - `tests/test_fm_html_extract.py`: 9 tests
-  - `tests/test_fm_save_extract.py`: 11 tests
+- **Current verification**: the repo currently has **49 passing tests** via `python3 -m unittest discover -s tests -p 'test_*.py'`
+  - 10 test modules total
+  - 9 HTML-pipeline tests
+  - 40 save-extractor / relation / real-slice tests
 
 ## What Works Today
 
@@ -57,18 +58,18 @@ python3 -m fm_html_extract --input <file-or-dir> --output-dir <dir>
   - Detects the primary club name from squad exports
   - Carries optional `save_name`, `club_name`, and `manager_name` into snapshot and prompt outputs
 - **Current coverage**:
-  - HTML pipeline behavior is covered by the 9 tests in `tests/test_fm_html_extract.py`
+  - HTML pipeline behavior is covered by 9 tests in `tests/test_fm_html_extract.py`
 
-### 3. Save File Binary Research + First-Pass World Extractor
+### 3. Save Extraction + Relation Resolution (Active, Useful, Still Incomplete)
 - **Save format mapped**: `.fm` files = 26-byte SI header + zstd multi-frame payload
-- **Frame 3 deep analysis complete enough to support structured extraction**
-  - Header contains record counts: 131,584 players, 65,800 clubs, 2,028 competitions, 258 nations
+- **Frame 3 analysis is now usable for structured extraction**
+  - Header counts: 131,584 players, 65,800 clubs, 2,028 competitions, 258 nations
   - Game date extracted: **7 Jan 2025** from the Grenoble save
 - **Known hybrid player block is confirmed**
   - `0x00-0x0E`: 15 position bytes stored directly on the `1-20` scale
   - `0x0F-0x44`: 54 classic FM attributes in FMScout/Cheat Engine order, stored on an internal `0-100` scale
   - Visible display approximation: `display ~= round(raw / 5)` for non-position attributes
-  - Haaland is the strongest verified anchor:
+  - Haaland remains the strongest verified anchor:
     - Original block: `0x060DE453`
     - Modified block: `0x060DE1BB`
     - Finishing byte: raw `91 -> 5`, display `18 -> 1`
@@ -77,14 +78,17 @@ python3 -m fm_html_extract --input <file-or-dir> --output-dir <dir>
   - `291,128` first names
   - `595,757` surnames
   - `24,098` clubs
-  - Game info including date/version/header counts
-- **Working reference extractor**:
+  - game info including date/version/header counts
+
+#### Working CLIs
+
+**Reference extractor**
 
 ```bash
 python3 scripts/fm26_parser.py <save-or-frame>
 ```
 
-- **Working first-pass world extractor CLI**:
+**World extractor**
 
 ```bash
 python3 -m fm_save_extract \
@@ -95,31 +99,50 @@ python3 -m fm_save_extract \
   [--emit-reference-tables]
 ```
 
-- **Current `fm_save_extract` bundle outputs**:
-  - `game_info.json`
-  - `clubs.json`
-  - `people.json`
-  - `players.json`
-  - `staff_roles.json`
-  - `club_links.json`
-  - `contracts.json`
-  - `unresolved_candidates.json`
-  - optional `firstnames.json` / `surnames.json`
-- **What the first-pass extractor already does**
-  - Enumerates candidate people from hybrid blocks
-  - Extracts inline full-name / DOB anchors
-  - Clusters nearby metadata hits
-  - Emits unresolved evidence rather than hiding uncertainty
-  - Accepts diff frames for supervised comparison summaries
-- **What is validated today**
-  - Contract wage / expiry decoding from synthetic diff frames
-  - Staff-role decoding for `WorkingWithYoungsters` from synthetic diff frames
-  - CLI bundle writing for the world extractor
-- **Current limit**
-  - This is still a **first-pass** world extractor, not a complete live-save decoder
-  - Player blocks are anchored, but robust club/person/employment joins are still incomplete
-  - `club_links.json` is currently more of a target surface than a finished decoded layer
-  - Contract and staff decoding are promising, but not yet generalized across broad live saves
+#### Current `fm_save_extract` outputs
+- `game_info.json`
+- `clubs.json`
+- `people.json`
+- `players.json`
+- `staff_roles.json`
+- `club_links.json`
+- `contracts.json`
+- `unresolved_candidates.json`
+- optional `firstnames.json` / `surnames.json`
+
+#### What the extractor now does
+- Enumerates candidate people from hybrid blocks
+- Extracts inline full-name / DOB anchors
+- Reconciles hybrid-block people with inline-name people into canonical records
+- Preserves `alias_person_keys` for canonicalization
+- Parses inline relation entries near named-person slices
+- Classifies relation tags into:
+  - `club_employment`
+  - `staff_assignment`
+  - `contract_reference`
+- Resolves supported club-link patterns into typed `club_links.json` entries
+- Attaches `typed_relation_summaries` to people
+- Enriches staff roles with typed link refs
+- Enriches contracts with best available club-link matches when possible
+- Emits unresolved evidence instead of hiding uncertainty
+
+#### What is validated today
+- Contract wage / expiry decoding from synthetic diff frames
+- Staff-role decoding for `WorkingWithYoungsters` from synthetic diff frames
+- Diff-decoder hardening around generic labels / frame order
+- Relation-tag classification
+- Relation resolution against known control patterns
+- Extractor reconciliation of alias keys and inline relation entries
+- Real-slice validation via a 6-slice manifest covering:
+  - Xabi contract base / raise / expiry
+  - Jorge staff family before / after edit
+  - Athletic Club control family
+
+#### Current limits
+- This is still **not** a complete live-save decoder
+- Club and employment resolution is only partially generalized
+- Some club-link resolution is still pattern-backed rather than broad-based
+- Contract and staff decoding are stronger than before, but still need wider live-save coverage
 
 ### 4. BepInEx Plugin Approach (Blocked)
 We attempted to build a BepInEx plugin for FM26 to read live game objects at runtime.
@@ -141,7 +164,7 @@ We attempted to build a BepInEx plugin for FM26 to read live game objects at run
 - BepInEx remains blocked on macOS Tahoe until upstream ships arm64e-compatible native libraries
 
 ### 5. Status Dashboard (Working)
-- A lightweight project tracker dashboard now exists under `dashboard/`
+- A lightweight project tracker dashboard exists under `dashboard/`
 - It is generated from live repo state by:
 
 ```bash
@@ -178,17 +201,20 @@ python3 -m fm_html_extract \
 
 - Feed the generated snapshot JSON and prompt markdown directly to LLMs
 
-### 2. Advance `fm_save_extract` from first-pass to stable joins
-- Generalize person scanning beyond known-player anchors
-- Decode staff-side attribute layouts more reliably
-- Map club/job/team/contract references
-- Promote `club_links.json` and `contracts.json` from partial surfaces to live-save validated outputs
+### 2. Broaden relation resolution beyond the current control patterns
+- Generalize club/person/employment joins across more clubs and staff neighborhoods
+- Reduce dependence on fixture-backed or control-slice-specific relation patterns
 
-### 3. Leave news / inbox / media until joins are trustworthy
-- Narrative extraction depends on stable person/team/competition linking underneath
-- `.skc` cache parsing is still a parallel option once joins are in place
+### 3. Generalize contract and staff decoding across more live families
+- Use more supervised edited saves
+- Add more real-slice fixtures and manifests
+- Promote `club_links.json`, `contracts.json`, and `staff_roles.json` from targeted success cases to broader live-save coverage
 
-### 4. Keep the BepInEx path deprioritized unless runtime conditions change
+### 4. Leave news / inbox / media until joins are trustworthy
+- Narrative extraction still depends on stable person/team/competition linkage underneath
+- `.skc` cache parsing remains a parallel option once joins are in place
+
+### 5. Keep the BepInEx path deprioritized unless runtime conditions change
 - Monitor upstream arm64e support
 - Fallback option remains Windows/VM if live runtime access becomes essential
 
@@ -197,9 +223,11 @@ python3 -m fm_html_extract \
 ```text
 FM26 Deepener/
 ├── fm_html_extract/                     # HTML export parser, snapshot builder, prompt pack generation
-├── fm_save_extract/                     # First-pass world extractor, candidate enumeration, diff decoders
+├── fm_save_extract/                     # World extractor, relation tagging/resolution, reconciliation
 ├── scripts/                            # Save research scripts + dashboard build/publish helpers
-├── tests/                              # 20 tests total (9 HTML, 11 save extractor)
+├── tests/                              # 49 tests across 10 modules
+├── tests/fixtures/real_slice_manifest.json
+│                                        # 6-slice control/edit manifest for real extraction validation
 ├── output/                             # Extracted firstnames, surnames, clubs, game_info
 ├── research/                           # Save-format findings and reverse-engineering notes
 ├── FM26Deepener/                       # BepInEx plugin project (blocked on Tahoe arm64e)
@@ -228,4 +256,4 @@ FM26 Deepener/
 ## Current Recommendation
 Use the HTML export pipeline now, not the BepInEx path.
 
-Treat `fm_save_extract` as the active R&D / automation lane: it is no longer just raw research, but it is also not yet a full live-save decoder.
+Treat `fm_save_extract` as the active automation / reverse-engineering lane: it is no longer just raw research, but it is still not yet a full generalized live-save decoder.
